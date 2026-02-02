@@ -69,4 +69,3 @@ CLAUDE.local.md
 !data/*.stp
 !models/*.step
 !models/*.stp
-src/lift_analyzer/viz/__pycache__/viewer.cpython-313.pyc
