@@ -11,15 +11,15 @@ Finite element analysis tool for aircraft design. Ingests STEP files, displays C
 
 # Development Commands
 ```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
+# Install pythonocc-core (conda required)
+conda install -c conda-forge pythonocc-core
 
-# Install dependencies
-pip install -r requirements.txt
+# Install package in editable mode (required once, then changes take effect immediately)
+pip install -e .
 
 # Run application
-python -m lift_analyzer
+python -m lift_analyzer model.step
+python -m lift_analyzer --demo  # no STEP file needed
 
 # Run tests (single file preferred)
 pytest tests/test_file.py -v
@@ -57,7 +57,7 @@ lift_analyzer/
 
 # Domain Conventions
 - Use SI units internally (meters, Pascals, Newtons)
-- Coordinate system: X = forward, Y = starboard, Z = up (aircraft body frame)
+- Coordinate system: X = right (starboard), -Y = forward (nose), Z = up (matches Autodesk Fusion export)
 - Center of Pressure (CoP) = Center of Lift (CoL) - use interchangeably
 - Distinguish between reference area (Sref) and wetted area
 

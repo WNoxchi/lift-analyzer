@@ -1,0 +1,2 @@
+[console_scripts]
+lift-analyzer = lift_analyzer.__main__:main

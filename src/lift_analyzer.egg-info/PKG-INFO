@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: lift-analyzer
+Version: 0.1.0
+Summary: Finite element analysis tool for aircraft design - calculates Center of Lift from STEP files
+License: MIT
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pyvista>=0.43.0
+Requires-Dist: numpy>=1.24.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
