@@ -6,6 +6,11 @@ from typing import Any
 import numpy as np
 import pyvista as pv
 
+from lift_analyzer.aero.center_of_lift import (
+    AirflowDirection,
+    CenterOfLiftResult,
+    calculate_center_of_lift,
+)
 from lift_analyzer.cad.step_loader import load_step_as_mesh
 
 
@@ -30,8 +35,14 @@ class StepViewer:
     # Azimuth: rotation around Z axis (0=+X, 90=+Y, 180=-X, 270=-Y)
     # Elevation: tilt up/down from horizontal (positive = looking down from above)
     # ==========================================================================
-    DEFAULT_AZIMUTH = 270.0    # View from +X, +Y quadrant (front-right of aircraft)
+    DEFAULT_AZIMUTH = 270.0    # View from +X, -Y quadrant (front-left of aircraft)
     DEFAULT_ELEVATION = 0.0   # Slight top-down angle
+
+    # ==========================================================================
+    # AIRFLOW CONFIGURATION
+    # Default airflow direction: from -Y to +Y (aircraft nose points -Y)
+    # ==========================================================================
+    DEFAULT_AIRFLOW = AirflowDirection.POSITIVE_Y
 
     def __init__(self, title: str = "Lift Analyzer - STEP Viewer") -> None:
         """Initialize the viewer.
@@ -44,6 +55,7 @@ class StepViewer:
         self.title = title
         self.plotter: pv.Plotter | None = None
         self.mesh: pv.PolyData | None = None
+        self.col_result: CenterOfLiftResult | None = None
         self._default_camera_position: Any = None
 
     def load(self, filepath: str | Path, deflection: float = 0.1) -> None:
@@ -57,6 +69,7 @@ class StepViewer:
             Mesh quality parameter. Smaller = finer mesh. Default is 0.1.
         """
         self.mesh = load_step_as_mesh(filepath, deflection)
+        self._calculate_col()
 
     def load_mesh(self, mesh: pv.PolyData) -> None:
         """Load a PyVista mesh directly (useful for testing).
@@ -67,6 +80,56 @@ class StepViewer:
             The mesh to display.
         """
         self.mesh = mesh
+        self._calculate_col()
+
+    def _calculate_col(self) -> None:
+        """Calculate center of lift for the loaded mesh."""
+        if self.mesh is None:
+            return
+        self.col_result = calculate_center_of_lift(self.mesh, self.DEFAULT_AIRFLOW)
+
+    def _add_col_line(self) -> None:
+        """Add a red horizontal line showing the Center of Lift Y-position."""
+        if self.plotter is None or self.mesh is None or self.col_result is None:
+            return
+
+        # Get mesh bounds to determine line length and reference point
+        bounds = self.mesh.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
+        x_min, x_max = bounds[0], bounds[1]
+        y_min = bounds[2]  # Front of aircraft (nose at -Y)
+        z_center = (bounds[4] + bounds[5]) / 2  # Center Z for visibility
+
+        # Extend line slightly beyond mesh bounds
+        x_padding = (x_max - x_min) * 0.1
+        line_x_min = x_min - x_padding
+        line_x_max = x_max + x_padding
+
+        # Create line at the CoL Y-coordinate
+        col_y = self.col_result.y_coordinate
+        line = pv.Line(
+            pointa=(line_x_min, col_y, z_center),
+            pointb=(line_x_max, col_y, z_center),
+        )
+
+        # Add the line to the plotter
+        self.plotter.add_mesh(
+            line,
+            color="red",
+            line_width=4,
+            label="Center of Lift",
+        )
+
+        # Calculate distance from front of aircraft (nose)
+        col_distance_from_nose = col_y - y_min
+
+        # Add a label showing distance from nose
+        self.plotter.add_text(
+            f"CoL: {col_distance_from_nose:.3f} from front",
+            position="upper_left",
+            font_size=12,
+            color="red",
+            shadow=True,
+        )
 
     def _reset_camera(self) -> None:
         """Reset camera to default orientation (45° azimuth, 45° elevation)."""
@@ -146,6 +209,9 @@ class StepViewer:
             specular=0.5,
             specular_power=15,
         )
+
+        # Add Center of Lift visualization (red line)
+        self._add_col_line()
 
         # Add orientation widget (compass) in upper-right corner
         # Coordinate system: X=Right, -Y=Forward (nose), Z=Up
