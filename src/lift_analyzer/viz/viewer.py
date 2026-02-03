@@ -3,13 +3,16 @@
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pyvista as pv
 
 from lift_analyzer.aero.center_of_lift import (
     AirflowDirection,
     CenterOfLiftResult,
     calculate_center_of_lift,
+)
+from lift_analyzer.aero.panel_method import (
+    PanelMethodResult,
+    calculate_center_of_lift_panel_method,
 )
 from lift_analyzer.cad.step_loader import load_step_as_mesh
 
@@ -44,18 +47,32 @@ class StepViewer:
     # ==========================================================================
     DEFAULT_AIRFLOW = AirflowDirection.POSITIVE_Y
 
-    def __init__(self, title: str = "Lift Analyzer - STEP Viewer") -> None:
+    def __init__(
+        self,
+        title: str = "Lift Analyzer - STEP Viewer",
+        use_panel_method: bool = False,
+        max_panels: int = 2000,
+    ) -> None:
         """Initialize the viewer.
 
         Parameters
         ----------
         title : str, optional
             Window title. Default is "Lift Analyzer - STEP Viewer".
+        use_panel_method : bool, optional
+            If True, use Source+Doublet panel method for CoL calculation.
+            If False (default), use geometric projected area method.
+        max_panels : int, optional
+            Maximum panels for panel method. More panels = better detail
+            but slower computation. Default is 2000.
         """
         self.title = title
+        self.use_panel_method = use_panel_method
+        self.max_panels = max_panels
         self.plotter: pv.Plotter | None = None
         self.mesh: pv.PolyData | None = None
         self.col_result: CenterOfLiftResult | None = None
+        self.panel_result: PanelMethodResult | None = None
         self._default_camera_position: Any = None
 
     def load(self, filepath: str | Path, deflection: float = 0.1) -> None:
@@ -86,7 +103,27 @@ class StepViewer:
         """Calculate center of lift for the loaded mesh."""
         if self.mesh is None:
             return
-        self.col_result = calculate_center_of_lift(self.mesh, self.DEFAULT_AIRFLOW)
+
+        if self.use_panel_method:
+            # Use Source + Doublet panel method
+            airflow_dir = (
+                self.DEFAULT_AIRFLOW.value
+                if isinstance(self.DEFAULT_AIRFLOW, AirflowDirection)
+                else self.DEFAULT_AIRFLOW
+            )
+            self.panel_result = calculate_center_of_lift_panel_method(
+                self.mesh, airflow_direction=airflow_dir, max_panels=self.max_panels
+            )
+            # Create a compatible result for the visualization
+            self.col_result = CenterOfLiftResult(
+                position=self.panel_result.center_of_lift,
+                y_coordinate=self.panel_result.center_of_lift[1],
+                total_projected_area=self.panel_result.total_lift,
+                num_faces_considered=len(self.panel_result.pressure_coefficients),
+            )
+        else:
+            # Use geometric projected area method
+            self.col_result = calculate_center_of_lift(self.mesh, self.DEFAULT_AIRFLOW)
 
     def _add_col_line(self) -> None:
         """Add a red horizontal line showing the Center of Lift Y-position."""
@@ -122,9 +159,10 @@ class StepViewer:
         # Calculate distance from front of aircraft (nose)
         col_distance_from_nose = col_y - y_min
 
-        # Add a label showing distance from nose
+        # Add a label showing distance from nose and method used
+        method_label = "Panel Method" if self.use_panel_method else "Geometric"
         self.plotter.add_text(
-            f"CoL: {col_distance_from_nose:.3f} from front",
+            f"CoL ({method_label}): {col_distance_from_nose:.3f} from front",
             position="upper_left",
             font_size=12,
             color="red",
@@ -264,9 +302,15 @@ def create_test_mesh() -> pv.PolyData:
     return pv.Box(bounds=(-1, 1, -0.5, 0.5, -0.2, 0.2))
 
 
-def main_demo() -> None:
-    """Run a demo with a test box (no STEP file required)."""
-    viewer = StepViewer(title="Lift Analyzer - Demo")
+def main_demo(use_panel_method: bool = False) -> None:
+    """Run a demo with a test box (no STEP file required).
+
+    Parameters
+    ----------
+    use_panel_method : bool, optional
+        If True, use panel method for CoL calculation. Default is False.
+    """
+    viewer = StepViewer(title="Lift Analyzer - Demo", use_panel_method=use_panel_method)
     viewer.load_mesh(create_test_mesh())
     viewer.show()
 

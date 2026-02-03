@@ -13,6 +13,7 @@ dependencies = [
     # Note: pythonocc-core must be installed via conda: conda install -c conda-forge pythonocc-core
     "pyvista>=0.43.0",
     "numpy>=1.24.0",
+    "numba>=0.58.0",
 ]
 
 [project.optional-dependencies]
